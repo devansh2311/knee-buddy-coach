@@ -7,154 +7,64 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Pause, Play, StopCircle, CheckCircle2, Volume2, VolumeX, RotateCcw } from "lucide-react";
 import SensorConnection from "@/components/SensorConnection";
 import { bluetoothService } from "@/services/bluetoothService";
-import { SensorPacket } from "@/types/sensorData";
 import { Suspense } from "react";
 import ExerciseAvatar from "@/components/ExerciseAvatar";
 import { exercises as exerciseList } from "./Exercises";
 import { exerciseDefinitions } from "@/components/ExerciseAvatar";
 import { voiceGuidance, exerciseGuidance } from "@/services/voiceGuidanceService";
+import { useExerciseRepCounter } from "@/hooks/useExerciseRepCounter";
 
 type ExercisePhase = 'demo' | 'countdown' | 'live' | 'complete';
 
 const ExercisePlayer = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [currentSet, setCurrentSet] = useState(1);
-  const [currentRep, setCurrentRep] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [feedback, setFeedback] = useState("Watch the demonstration carefully!");
   const [exercisePhase, setExercisePhase] = useState<ExercisePhase>('demo');
   const [countdownValue, setCountdownValue] = useState(3);
   const [demoTimer, setDemoTimer] = useState(10);
-  const [sensorData, setSensorData] = useState<SensorPacket | null>(null);
   const [isSensorConnected, setIsSensorConnected] = useState(false);
-  const [lastKneeAngle, setLastKneeAngle] = useState(0);
-  const [repState, setRepState] = useState<'flexed' | 'extended'>('extended');
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
-  const [lastRepAnnounced, setLastRepAnnounced] = useState(0);
 
   const exercise = id ? exerciseList.find(ex => ex.id === parseInt(id)) : null;
+
+  // Use the extracted rep counter hook
+  const {
+    currentRep,
+    currentSet,
+    feedback,
+    lastLeftAngle,
+    lastRightAngle,
+    repState,
+    sensorData,
+    exerciseComplete,
+    setFeedback,
+  } = useExerciseRepCounter(
+    exercise ? { id: exercise.id, reps: exercise.reps, sets: exercise.sets, leg: exercise.leg } : null,
+    exercisePhase,
+    isSensorConnected,
+    isPaused
+  );
+
+  // Set phase to complete when hook signals it
+  useEffect(() => {
+    if (exerciseComplete) {
+      setExercisePhase('complete');
+    }
+  }, [exerciseComplete]);
 
   // Cleanup voice on unmount
   useEffect(() => {
     return () => voiceGuidance.cancel();
   }, []);
 
-  // Directly subscribe to bluetooth state to ensure isSensorConnected is always in sync.
-  // This is needed because SensorConnection's onConnectionChange callback might miss the
-  // initial state due to React render batching.
+  // Sync bluetooth connection state
   useEffect(() => {
     const unsubscribe = bluetoothService.onStateChange((state) => {
       setIsSensorConnected(state.isConnected);
     });
     return unsubscribe;
   }, []);
-
-  // Subscribe to sensor data and detect reps
-  useEffect(() => {
-    const unsubscribe = bluetoothService.onDataReceived((data) => {
-      setSensorData(data);
-
-      // Only count reps during live phase when sensor is connected
-      if (exercisePhase === 'live' && isSensorConnected && exercise && id) {
-        import('@/utils/sensorDataMapper').then(({ sensorDataMapper }) => {
-          if (!sensorDataMapper.isValidPacket(data)) return;
-
-          const processed = sensorDataMapper.processSensorPacket(data, true);
-
-          // Select sensors based on exercise leg
-          const usesLeftLeg = exercise.leg === "left";
-          const thighSensor = usesLeftLeg ? processed.sensors.left_thigh : processed.sensors.right_thigh;
-          const shinSensor = usesLeftLeg ? processed.sensors.left_shin : processed.sensors.right_shin;
-
-          const pelvisSensor = processed.sensors.pelvis;
-
-          // Determine which angle to track
-          const exerciseDef = exerciseDefinitions[id];
-          const measureType = exerciseDef?.measureType || 'knee';
-
-          let currentAngle = 0;
-          if (measureType === 'hip') {
-            // Track hip flexion (Thigh vs Pelvis)
-            currentAngle = sensorDataMapper.calculateJointAngle(pelvisSensor, thighSensor);
-
-            // Handle wrapping issues or specifics for SLR
-            // If angle > 180, it might be wrapping around, but calculateJointAngle handles 3 axes max
-          } else {
-            // Track knee flexion (Shin vs Thigh)
-            currentAngle = sensorDataMapper.calculateJointAngle(thighSensor, shinSensor);
-          }
-
-          const targetAngle = exerciseDef?.targetAngle || 90;
-
-          // Flexed/Active threshold: 30% of target angle (for ROM) or simple target check
-          // Extended/Rest threshold: Start position
-
-          // Logic depends on the exercise direction
-          // Most exercises: Start at 0-10 -> Go to Target -> Return to 0-10
-
-          const startThreshold = 15; // Degrees from 0 considered "returned to start"
-          const completionThreshold = targetAngle * 0.85; // 85% of target considered "rep done"
-
-          // Debug logging
-          console.log(`[REP] angle=${currentAngle.toFixed(1)}° | state=${repState} | threshold=${completionThreshold.toFixed(0)}° | start<${startThreshold}°`);
-
-          // Detect rep completion
-          if (repState === 'extended' && currentAngle > completionThreshold) {
-            setRepState('flexed');
-          } else if (repState === 'flexed' && currentAngle < startThreshold) {
-            setRepState('extended');
-            // Count a rep!
-            setCurrentRep((prev) => {
-              const nextRep = prev + 1;
-              if (nextRep <= exercise.reps) {
-                const feedbackMessages = [
-                  "Great form!",
-                  "Keep it up!",
-                  "Excellent movement!",
-                  "You're doing great!",
-                  "Perfect technique!",
-                ];
-                const feedback = feedbackMessages[Math.floor(Math.random() * feedbackMessages.length)];
-                setFeedback(feedback);
-
-                // Voice announcement for rep count
-                voiceGuidance.speak(`${nextRep}`);
-                setLastRepAnnounced(nextRep);
-
-                // Form cues every 5 reps
-                if (nextRep % 5 === 0 && id) {
-                  const guidance = exerciseGuidance[parseInt(id) as keyof typeof exerciseGuidance];
-                  if (guidance?.formCues) {
-                    const cue = guidance.formCues[Math.floor(Math.random() * guidance.formCues.length)];
-                    voiceGuidance.speak(cue);
-                  }
-                }
-
-                return nextRep;
-              } else {
-                if (currentSet < exercise.sets) {
-                  voiceGuidance.speak(`Set ${currentSet} complete. Rest for a moment.`, true);
-                  setCurrentSet(currentSet + 1);
-                  setLastRepAnnounced(0);
-                  return 0;
-                } else {
-                  setExercisePhase('complete');
-                  setFeedback("Exercise complete! Excellent work!");
-                  voiceGuidance.speak("Exercise complete! Excellent work!", true);
-                }
-                return prev;
-              }
-            });
-          }
-
-          setLastKneeAngle(currentAngle);
-        });
-      }
-    });
-
-    return unsubscribe;
-  }, [exercisePhase, isSensorConnected, repState, currentSet, exercise]);
 
   // Demo phase timer
   useEffect(() => {
@@ -192,7 +102,6 @@ const ExercisePlayer = () => {
           setExercisePhase('live');
           setFeedback("Let's go! Follow along!");
 
-          // Announce exercise start
           if (id) {
             const guidance = exerciseGuidance[parseInt(id) as keyof typeof exerciseGuidance];
             if (guidance) {
@@ -202,7 +111,6 @@ const ExercisePlayer = () => {
           return 0;
         }
 
-        // Countdown voice
         if (prev <= 3) {
           voiceGuidance.speak(prev.toString(), true);
         }
@@ -213,23 +121,6 @@ const ExercisePlayer = () => {
 
     return () => clearInterval(interval);
   }, [exercisePhase, id]);
-
-  // Show disconnected warning when in live mode without sensors
-  // Also clear warning when sensors connect during live mode
-  useEffect(() => {
-    if (exercisePhase === 'live') {
-      if (!isSensorConnected) {
-        setFeedback("⚠️ WARNING: Sensors disconnected - Reps are NOT being counted. Please reconnect!");
-      } else {
-        // Clear any existing disconnection warning
-        setFeedback(prev =>
-          prev.includes('WARNING') || prev.includes('disconnected')
-            ? "Let's go! Follow along!"
-            : prev
-        );
-      }
-    }
-  }, [exercisePhase, isSensorConnected]);
 
   if (!exercise) {
     return (
@@ -260,9 +151,11 @@ const ExercisePlayer = () => {
     setDemoTimer(10);
     setCountdownValue(3);
     setIsPaused(false);
-    // Optional: Reset reps? No, typically users just want to see the demo again but keep progress.
-    // If they want to restart completely, they can End Session.
   };
+
+  // Determine which angle is the "active" tracked one
+  const trackedAngle = exercise.leg === "left" ? lastLeftAngle : lastRightAngle;
+  const targetAngle = exerciseDefinitions[id || "1"]?.targetAngle || 90;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -312,14 +205,8 @@ const ExercisePlayer = () => {
                 }>
                   <Canvas
                     shadows
-                    gl={{
-                      antialias: true,
-                      alpha: true,
-                      preserveDrawingBuffer: true
-                    }}
-                    onCreated={({ gl }) => {
-                      gl.setClearColor('#f8fafb', 1);
-                    }}
+                    gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
+                    onCreated={({ gl }) => { gl.setClearColor('#f8fafb', 1); }}
                   >
                     <PerspectiveCamera makeDefault position={[0, 1.5, 3]} />
                     <OrbitControls
@@ -378,7 +265,7 @@ const ExercisePlayer = () => {
               </div>
             )}
 
-            {/* Live Mode Badge */}
+            {/* Live Mode Badge + Bilateral Angle Display */}
             {exercisePhase === 'live' && (
               <div className="absolute top-4 right-4 z-10 flex flex-col gap-2 animate-fade-in">
                 <div className="bg-success/90 text-success-foreground px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
@@ -387,16 +274,30 @@ const ExercisePlayer = () => {
                 </div>
                 {isSensorConnected && (
                   <div className="bg-card/95 border-2 border-primary text-foreground px-4 py-3 rounded-lg shadow-lg backdrop-blur-sm">
-                    <div className="text-center">
-                      <div className="text-4xl font-bold text-primary">{Math.round(lastKneeAngle)}°</div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        Target: {exerciseDefinitions[id || "1"]?.targetAngle || 90}°
+                    <div className="text-xs text-muted-foreground text-center mb-2">
+                      Target: {targetAngle}°
+                    </div>
+                    <div className="flex gap-4">
+                      {/* Right Leg */}
+                      <div className={`text-center ${exercise.leg === 'right' || exercise.leg === 'bilateral' ? '' : 'opacity-50'}`}>
+                        <div className="text-xs font-semibold text-muted-foreground mb-1">R</div>
+                        <div className={`text-3xl font-bold ${exercise.leg === 'right' ? 'text-primary' : 'text-foreground'}`}>
+                          {Math.round(lastRightAngle)}°
+                        </div>
                       </div>
-                      <div className="text-xs mt-1">
-                        <span className={`font-semibold ${repState === 'flexed' ? 'text-orange-500' : 'text-green-500'}`}>
-                          {repState === 'flexed' ? '● Flexed' : '○ Extended'}
-                        </span>
+                      <div className="w-px bg-border"></div>
+                      {/* Left Leg */}
+                      <div className={`text-center ${exercise.leg === 'left' || exercise.leg === 'bilateral' ? '' : 'opacity-50'}`}>
+                        <div className="text-xs font-semibold text-muted-foreground mb-1">L</div>
+                        <div className={`text-3xl font-bold ${exercise.leg === 'left' ? 'text-primary' : 'text-foreground'}`}>
+                          {Math.round(lastLeftAngle)}°
+                        </div>
                       </div>
+                    </div>
+                    <div className="text-xs mt-2 text-center">
+                      <span className={`font-semibold ${repState === 'flexed' ? 'text-orange-500' : 'text-green-500'}`}>
+                        {repState === 'flexed' ? '● Flexed' : '○ Extended'}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -441,25 +342,13 @@ const ExercisePlayer = () => {
             onClick={toggleVoice}
           >
             {isVoiceEnabled ? (
-              <>
-                <Volume2 className="h-8 w-8 mr-2" />
-                Voice On
-              </>
+              <><Volume2 className="h-8 w-8 mr-2" />Voice On</>
             ) : (
-              <>
-                <VolumeX className="h-8 w-8 mr-2" />
-                Voice Off
-              </>
+              <><VolumeX className="h-8 w-8 mr-2" />Voice Off</>
             )}
           </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={handleReplayDemo}
-            title="Replay Demonstration"
-          >
-            <RotateCcw className="h-8 w-8 mr-2" />
-            Replay Demo
+          <Button variant="outline" size="lg" onClick={handleReplayDemo} title="Replay Demonstration">
+            <RotateCcw className="h-8 w-8 mr-2" />Replay Demo
           </Button>
           <Button
             variant={isPaused ? "default" : "outline"}
@@ -469,25 +358,13 @@ const ExercisePlayer = () => {
             disabled={exercisePhase !== 'live'}
           >
             {isPaused ? (
-              <>
-                <Play className="h-8 w-8 mr-2" />
-                Resume
-              </>
+              <><Play className="h-8 w-8 mr-2" />Resume</>
             ) : (
-              <>
-                <Pause className="h-8 w-8 mr-2" />
-                Pause
-              </>
+              <><Pause className="h-8 w-8 mr-2" />Pause</>
             )}
           </Button>
-          <Button
-            variant="destructive"
-            size="lg"
-            className="flex-1"
-            onClick={handleEndSession}
-          >
-            <StopCircle className="h-8 w-8 mr-2" />
-            End Session
+          <Button variant="destructive" size="lg" className="flex-1" onClick={handleEndSession}>
+            <StopCircle className="h-8 w-8 mr-2" />End Session
           </Button>
         </div>
       </div>
