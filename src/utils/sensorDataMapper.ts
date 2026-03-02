@@ -17,17 +17,16 @@ export class SensorDataMapper {
     if (!offset) return q;
 
     const qThree = this.toThreeQuaternion(q);
-    const offsetThree = this.toThreeQuaternion(offset);
+    const offsetInv = this.toThreeQuaternion(offset).invert();
 
-    // Apply inverse of calibration offset
-    offsetThree.invert();
-    qThree.multiply(offsetThree);
+    // Correct order: offset⁻¹ * q (world-frame relative rotation)
+    const result = offsetInv.multiply(qThree);
 
     return {
-      qw: qThree.w,
-      qx: qThree.x,
-      qy: qThree.y,
-      qz: qThree.z
+      qw: result.w,
+      qx: result.x,
+      qy: result.y,
+      qz: result.z
     };
   }
 
