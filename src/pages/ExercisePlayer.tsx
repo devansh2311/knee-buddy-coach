@@ -10,6 +10,7 @@ import { bluetoothService } from "@/services/bluetoothService";
 import { Suspense } from "react";
 import ExerciseAvatar from "@/components/ExerciseAvatar";
 import { exercises as exerciseList } from "./Exercises";
+import { sensorDataMapper } from "@/utils/sensorDataMapper";
 import { exerciseDefinitions } from "@/components/ExerciseAvatar";
 import { voiceGuidance, exerciseGuidance } from "@/services/voiceGuidanceService";
 import { useExerciseRepCounter } from "@/hooks/useExerciseRepCounter";
@@ -53,8 +54,10 @@ const ExercisePlayer = () => {
     }
   }, [exerciseComplete]);
 
-  // Cleanup voice on unmount
+  // Clear stale gait calibration on mount so exercises use fresh sensor data;
+  // cleanup voice on unmount
   useEffect(() => {
+    sensorDataMapper.clearCalibration();
     return () => voiceGuidance.cancel();
   }, []);
 

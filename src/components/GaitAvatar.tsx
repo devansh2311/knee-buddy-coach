@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { Group, Mesh, Quaternion as ThreeQuaternion, Euler } from "three";
 import { SensorPacket } from "@/types/sensorData";
 import { GaitTestPhase } from "@/types/gaitAnalysis";
+import { sensorDataMapper } from "@/utils/sensorDataMapper";
 
 interface GaitAvatarProps {
   phase: GaitTestPhase;
@@ -41,79 +42,67 @@ const GaitAvatar = ({ phase, sensorData, isSensorConnected }: GaitAvatarProps) =
 
     // Priority: Live sensor data if connected
     if (isSensorConnected && sensorData) {
-      import("@/utils/sensorDataMapper").then(({ sensorDataMapper }) => {
-        if (!sensorDataMapper.isValidPacket(sensorData)) return;
+      if (!sensorDataMapper.isValidPacket(sensorData)) return;
 
-        const processed = sensorDataMapper.processSensorPacket(sensorData, true);
-        const { sensors } = processed;
+      const processed = sensorDataMapper.processSensorPacket(sensorData, true);
+      const { sensors } = processed;
 
-        const toThreeQ = (q: any) => new ThreeQuaternion(q.qx, q.qy, q.qz, q.qw);
+      const toThreeQ = (q: any) => new ThreeQuaternion(q.qx, q.qy, q.qz, q.qw);
 
-        // SENSOR CORRECTION: Only needed when NO calibration has been done.
-        // After gait calibration, sensor data is already normalized to "standing = identity"
-        // so no additional rotation is needed. Without calibration, raw IMU data uses
-        // "lying flat ≈ identity", requiring -PI/2 X to align with the upright avatar.
-        const sensorCorrectionQ = new ThreeQuaternion();
-        if (!sensorDataMapper.isCalibrated()) {
-          sensorCorrectionQ.setFromEuler(new Euler(-Math.PI / 2, 0, 0));
-        }
+      // SENSOR CORRECTION: Only needed when NO calibration has been done.
+      // After gait calibration, sensor data is already normalized to "standing = identity"
+      // so no additional rotation is needed. Without calibration, raw IMU data uses
+      // "lying flat ≈ identity", requiring -PI/2 X to align with the upright avatar.
+      const sensorCorrectionQ = new ThreeQuaternion();
+      if (!sensorDataMapper.isCalibrated()) {
+        sensorCorrectionQ.setFromEuler(new Euler(-Math.PI / 2, 0, 0));
+      }
 
-        const correctQ = (worldQ: ThreeQuaternion): ThreeQuaternion => {
-          return sensorCorrectionQ.clone().multiply(worldQ);
-        };
+      const correctQ = (worldQ: ThreeQuaternion): ThreeQuaternion => {
+        return sensorCorrectionQ.clone().multiply(worldQ);
+      };
 
-        // Pelvis: No physical sensor attached — keep body upright.
-        // The pelvis data slot outputs noise from the unconnected hardware,
-        // so we ignore it entirely to avoid contaminating joint computations.
-        if (pelvisRef.current) {
-          pelvisRef.current.quaternion.set(0, 0, 0, 1); // identity = upright
-        }
+      // Pelvis: No physical sensor attached — keep body upright.
+      if (pelvisRef.current) {
+        pelvisRef.current.quaternion.set(0, 0, 0, 1); // identity = upright
+      }
 
-        // Apply thigh rotations DIRECTLY (not relative to pelvis)
-        // Since pelvisRef is identity, corrected thigh = group-local orientation
-        if (rightUpperLegRef.current && sensors.right_thigh) {
-          rightUpperLegRef.current.quaternion.copy(correctQ(toThreeQ(sensors.right_thigh)));
-        }
+      // Apply thigh rotations DIRECTLY (not relative to pelvis)
+      if (rightUpperLegRef.current && sensors.right_thigh) {
+        rightUpperLegRef.current.quaternion.copy(correctQ(toThreeQ(sensors.right_thigh)));
+      }
 
-        if (leftUpperLegRef.current && sensors.left_thigh) {
-          leftUpperLegRef.current.quaternion.copy(correctQ(toThreeQ(sensors.left_thigh)));
-        }
+      if (leftUpperLegRef.current && sensors.left_thigh) {
+        leftUpperLegRef.current.quaternion.copy(correctQ(toThreeQ(sensors.left_thigh)));
+      }
 
-        // Apply shin rotations RELATIVE to thigh (shin IS a child of thigh)
-        if (rightKneeRef.current && sensors.right_shin) {
-          const thighQ = correctQ(toThreeQ(sensors.right_thigh));
-          const shinQ = correctQ(toThreeQ(sensors.right_shin));
-          const relativeShinQ = thighQ.clone().invert().multiply(shinQ);
-          rightKneeRef.current.quaternion.copy(relativeShinQ);
-        }
+      // Apply shin rotations RELATIVE to thigh
+      if (rightKneeRef.current && sensors.right_shin) {
+        const thighQ = correctQ(toThreeQ(sensors.right_thigh));
+        const shinQ = correctQ(toThreeQ(sensors.right_shin));
+        const relativeShinQ = thighQ.clone().invert().multiply(shinQ);
+        rightKneeRef.current.quaternion.copy(relativeShinQ);
+      }
 
-        if (leftKneeRef.current && sensors.left_shin) {
-          const thighQ = correctQ(toThreeQ(sensors.left_thigh));
-          const shinQ = correctQ(toThreeQ(sensors.left_shin));
-          const relativeShinQ = thighQ.clone().invert().multiply(shinQ);
-          leftKneeRef.current.quaternion.copy(relativeShinQ);
-        }
+      if (leftKneeRef.current && sensors.left_shin) {
+        const thighQ = correctQ(toThreeQ(sensors.left_thigh));
+        const shinQ = correctQ(toThreeQ(sensors.left_shin));
+        const relativeShinQ = thighQ.clone().invert().multiply(shinQ);
+        leftKneeRef.current.quaternion.copy(relativeShinQ);
+      }
 
-        // Arms - if in calibration mode, ensure they follow body or stick to T-pose?
-        // Actually, if we only have lower body sensors, we might want to animate arms based on phase or just let them hang?
-        // The original code didn't map arms from sensors (likely only 5 sensors: pelvis, 2x thigh, 2x shin).
-        // So we should animate arms based on phase even when sensors drive the legs.
-
-        if (phase === 'calibrate') {
-          // Arms T-pose
-          if (rightArmRef.current) rightArmRef.current.quaternion.copy(createQuaternion(0, 0, Math.PI / 2));
-          if (leftArmRef.current) leftArmRef.current.quaternion.copy(createQuaternion(0, 0, -Math.PI / 2));
-        } else if (phase === 'walking') {
-          // Swing arms
-          const armSwing = Math.sin(time * 2) * 0.3;
-          if (rightArmRef.current) rightArmRef.current.quaternion.copy(createQuaternion(-armSwing, 0, 0));
-          if (leftArmRef.current) leftArmRef.current.quaternion.copy(createQuaternion(armSwing, 0, 0));
-        } else {
-          // Arms relaxed
-          if (rightArmRef.current) rightArmRef.current.quaternion.copy(createQuaternion(0, 0, 0));
-          if (leftArmRef.current) leftArmRef.current.quaternion.copy(createQuaternion(0, 0, 0));
-        }
-      });
+      // Arms based on phase
+      if (phase === 'calibrate') {
+        if (rightArmRef.current) rightArmRef.current.quaternion.copy(createQuaternion(0, 0, Math.PI / 2));
+        if (leftArmRef.current) leftArmRef.current.quaternion.copy(createQuaternion(0, 0, -Math.PI / 2));
+      } else if (phase === 'walking') {
+        const armSwing = Math.sin(time * 2) * 0.3;
+        if (rightArmRef.current) rightArmRef.current.quaternion.copy(createQuaternion(-armSwing, 0, 0));
+        if (leftArmRef.current) leftArmRef.current.quaternion.copy(createQuaternion(armSwing, 0, 0));
+      } else {
+        if (rightArmRef.current) rightArmRef.current.quaternion.copy(createQuaternion(0, 0, 0));
+        if (leftArmRef.current) leftArmRef.current.quaternion.copy(createQuaternion(0, 0, 0));
+      }
     }
     // Fallback: Procedural animations when no sensors
     else {
