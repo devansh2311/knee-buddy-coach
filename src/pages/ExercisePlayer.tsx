@@ -54,10 +54,8 @@ const ExercisePlayer = () => {
     }
   }, [exerciseComplete]);
 
-  // Clear stale gait calibration on mount so exercises use fresh sensor data;
-  // cleanup voice on unmount
+  // Cleanup voice on unmount
   useEffect(() => {
-    sensorDataMapper.clearCalibration();
     return () => voiceGuidance.cancel();
   }, []);
 
