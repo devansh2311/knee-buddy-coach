@@ -76,7 +76,7 @@ const Dashboard = () => {
 
         // Transform data for charts
         if (checkins && checkins.length > 0) {
-          const chartData: ProgressData[] = checkins.map((checkin, index) => {
+          const chartData: ProgressData[] = checkins.map((checkin: any, index: number) => {
             const gaitTest = gaitTests?.find(g => g.id === checkin.gait_test_id);
             return {
               week: `Week ${index + 1}`,
@@ -84,6 +84,9 @@ const Dashboard = () => {
               stiffness: checkin.stiffness_score || 0,
               rightKneeROM: gaitTest?.right_knee_rom || 0,
               leftKneeROM: gaitTest?.left_knee_rom || 0,
+              walkingDifficulty: checkin.walking_difficulty ?? 0,
+              stairDifficulty: checkin.stair_difficulty ?? 0,
+              dailyActivityScore: checkin.daily_activity_score ?? 0,
             };
           });
           setProgressData(chartData);
