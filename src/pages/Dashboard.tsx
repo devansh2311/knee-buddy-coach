@@ -14,9 +14,6 @@ interface ProgressData {
   stiffness: number;
   rightKneeROM: number;
   leftKneeROM: number;
-  walkingDifficulty: number;
-  stairDifficulty: number;
-  dailyActivityScore: number;
 }
 
 const Dashboard = () => {
@@ -76,7 +73,7 @@ const Dashboard = () => {
 
         // Transform data for charts
         if (checkins && checkins.length > 0) {
-          const chartData: ProgressData[] = checkins.map((checkin: any, index: number) => {
+          const chartData: ProgressData[] = checkins.map((checkin, index) => {
             const gaitTest = gaitTests?.find(g => g.id === checkin.gait_test_id);
             return {
               week: `Week ${index + 1}`,
@@ -84,9 +81,6 @@ const Dashboard = () => {
               stiffness: checkin.stiffness_score || 0,
               rightKneeROM: gaitTest?.right_knee_rom || 0,
               leftKneeROM: gaitTest?.left_knee_rom || 0,
-              walkingDifficulty: checkin.walking_difficulty ?? 0,
-              stairDifficulty: checkin.stair_difficulty ?? 0,
-              dailyActivityScore: checkin.daily_activity_score ?? 0,
             };
           });
           setProgressData(chartData);
@@ -232,52 +226,6 @@ const Dashboard = () => {
               </CardContent>
             </Card>
           </div>
-
-          {/* Functional Ability Chart - Full Width */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-3xl">Functional Ability</CardTitle>
-              <CardDescription className="text-lg">Walking, stair climbing, and daily activity difficulty over time (0 = None, 4 = Extreme)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={progressData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="week" style={{ fontSize: '16px' }} />
-                  <YAxis domain={[0, 4]} ticks={[0, 1, 2, 3, 4]} style={{ fontSize: '16px' }} />
-                  <Tooltip
-                    contentStyle={{ fontSize: '16px' }}
-                    formatter={(value: number) => {
-                      const labels = ['None', 'Mild', 'Moderate', 'Severe', 'Extreme'];
-                      return [`${labels[value] || value} (${value})`, undefined];
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '16px' }} />
-                  <Line
-                    type="monotone"
-                    dataKey="walkingDifficulty"
-                    stroke="hsl(var(--chart-walking))"
-                    strokeWidth={3}
-                    name="Walking Difficulty"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="stairDifficulty"
-                    stroke="hsl(var(--chart-stairs))"
-                    strokeWidth={3}
-                    name="Stair Difficulty"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="dailyActivityScore"
-                    stroke="hsl(var(--chart-daily))"
-                    strokeWidth={3}
-                    name="Daily Activity"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
         )}
 
         {/* Navigation Buttons */}
