@@ -46,7 +46,7 @@ const metrics = [
   {
     key: "stair_difficulty" as const,
     label: "Stair Climbing",
-    icon: Stairs,
+    icon: ArrowUpDown,
     max: 10,
     colorClass: "bg-primary",
     description: "Higher is better",
