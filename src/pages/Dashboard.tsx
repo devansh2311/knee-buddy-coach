@@ -232,6 +232,52 @@ const Dashboard = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Functional Ability Chart - Full Width */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-3xl">Functional Ability</CardTitle>
+              <CardDescription className="text-lg">Walking, stair climbing, and daily activity difficulty over time (0 = None, 4 = Extreme)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={progressData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="week" style={{ fontSize: '16px' }} />
+                  <YAxis domain={[0, 4]} ticks={[0, 1, 2, 3, 4]} style={{ fontSize: '16px' }} />
+                  <Tooltip
+                    contentStyle={{ fontSize: '16px' }}
+                    formatter={(value: number) => {
+                      const labels = ['None', 'Mild', 'Moderate', 'Severe', 'Extreme'];
+                      return [`${labels[value] || value} (${value})`, undefined];
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '16px' }} />
+                  <Line
+                    type="monotone"
+                    dataKey="walkingDifficulty"
+                    stroke="hsl(var(--chart-walking))"
+                    strokeWidth={3}
+                    name="Walking Difficulty"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="stairDifficulty"
+                    stroke="hsl(var(--chart-stairs))"
+                    strokeWidth={3}
+                    name="Stair Difficulty"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="dailyActivityScore"
+                    stroke="hsl(var(--chart-daily))"
+                    strokeWidth={3}
+                    name="Daily Activity"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
         )}
 
         {/* Navigation Buttons */}
