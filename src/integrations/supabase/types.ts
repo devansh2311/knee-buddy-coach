@@ -99,35 +99,44 @@ export type Database = {
         Row: {
           checkin_date: string
           created_at: string | null
+          daily_activity_score: number | null
           gait_test_id: string | null
           id: string
           next_checkin_date: string
           pain_score: number | null
           recommended_exercise_id: string | null
+          stair_difficulty: number | null
           stiffness_score: number | null
           user_id: string
+          walking_difficulty: number | null
         }
         Insert: {
           checkin_date?: string
           created_at?: string | null
+          daily_activity_score?: number | null
           gait_test_id?: string | null
           id?: string
           next_checkin_date: string
           pain_score?: number | null
           recommended_exercise_id?: string | null
+          stair_difficulty?: number | null
           stiffness_score?: number | null
           user_id: string
+          walking_difficulty?: number | null
         }
         Update: {
           checkin_date?: string
           created_at?: string | null
+          daily_activity_score?: number | null
           gait_test_id?: string | null
           id?: string
           next_checkin_date?: string
           pain_score?: number | null
           recommended_exercise_id?: string | null
+          stair_difficulty?: number | null
           stiffness_score?: number | null
           user_id?: string
+          walking_difficulty?: number | null
         }
         Relationships: [
           {
