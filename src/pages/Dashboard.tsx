@@ -75,6 +75,9 @@ const Dashboard = () => {
 
         // Transform data for charts
         if (checkins && checkins.length > 0) {
+          // Set latest checkin for summary
+          setLatestCheckin(checkins[checkins.length - 1]);
+
           const chartData: ProgressData[] = checkins.map((checkin, index) => {
             const gaitTest = gaitTests?.find(g => g.id === checkin.gait_test_id);
             return {
