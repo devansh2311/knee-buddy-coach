@@ -53,6 +53,10 @@ All colors MUST be HSL.
     --chart-pain: 0 72% 51%;
     --chart-stiffness: 38 92% 50%;
     --chart-gait: 145 65% 45%;
+    --chart-primary: 210 85% 42%;
+    --chart-walking: 270 60% 55%;
+    --chart-stairs: 330 65% 50%;
+    --chart-daily: 180 60% 40%;
   }
 }
 

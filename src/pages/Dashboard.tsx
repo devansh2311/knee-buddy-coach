@@ -14,6 +14,9 @@ interface ProgressData {
   stiffness: number;
   rightKneeROM: number;
   leftKneeROM: number;
+  walkingDifficulty: number;
+  stairDifficulty: number;
+  dailyActivityScore: number;
 }
 
 const Dashboard = () => {
