@@ -24,6 +24,7 @@ const Dashboard = () => {
   const [canCheckin, setCanCheckin] = useState(true);
   const [daysUntilCheckin, setDaysUntilCheckin] = useState(0);
   const [progressData, setProgressData] = useState<ProgressData[]>([]);
+  const [latestCheckin, setLatestCheckin] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
