@@ -234,6 +234,9 @@ const Checkin = () => {
         // Calculate scores from questionnaire (0-4 scale to 0-10 scale)
         const avgPain = Math.round((questionnaireAnswers[0] / 4) * 10);
         const avgStiffness = Math.round((questionnaireAnswers[1] / 4) * 10);
+        const walkingDifficulty = questionnaireAnswers[2] ?? null;
+        const stairDifficulty = questionnaireAnswers[3] ?? null;
+        const dailyActivityScore = questionnaireAnswers[4] ?? null;
 
         // Get top recommended exercise
         const recommendedExercise = result.recommendations.length > 0
@@ -250,10 +253,13 @@ const Checkin = () => {
             user_id: session.user.id,
             pain_score: avgPain,
             stiffness_score: avgStiffness,
+            walking_difficulty: walkingDifficulty,
+            stair_difficulty: stairDifficulty,
+            daily_activity_score: dailyActivityScore,
             gait_test_id: gaitTest.id,
             recommended_exercise_id: recommendedExercise,
             next_checkin_date: nextCheckinDate.toISOString(),
-          });
+          } as any);
 
         if (checkinError) throw checkinError;
 
