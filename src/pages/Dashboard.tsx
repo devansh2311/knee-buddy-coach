@@ -150,6 +150,9 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
+        {/* Latest Check-in Summary */}
+        <LatestCheckinSummary checkin={latestCheckin} />
+
         {/* Progress Charts */}
         {loading ? (
           <Card className="p-12">
